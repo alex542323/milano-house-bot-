@@ -1,6 +1,5 @@
 import requests
 from bs4 import BeautifulSoup
-import time
 from datetime import datetime
 import json
 import os
@@ -10,7 +9,7 @@ TELEGRAM_TOKEN = "7977881088:AAEr1JHIEdvd-kiXFyONscQg4HJkqzBr4bA"
 CHAT_ID = "660849220"
 
 def scrape_immobiliare():
-    url = "https://www.immobiliare.it/vendita-case/milano/?prezzoMassimo=400000&superficieMinima=60&localiMinimo=3"
+    url = "https://www.immobiliare.it/vendita-case/milano/con-riscaldamento-autonomo/?prezzoMassimo=400000&superficieMinima=80&localiMinimo=3&tipoProprieta=1"
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
     try:
         response = requests.get(url, headers=headers, timeout=15)
@@ -40,7 +39,7 @@ def parse_listings(html):
                     continue
                 if not link.startswith('http'):
                     link = "https://www.immobiliare.it" + link
-                listing_id = link.split('/')[-2] if '/' in link else str(time.time())
+                listing_id = link.split('/')[-2] if '/' in link else str(datetime.now().timestamp())
                 title_elem = item.find('h2') or item.find('h3')
                 title = title_elem.text.strip() if title_elem else "N/A"
                 price_elem = item.find('span', {'data-testid': re.compile('.*price.*', re.I)})
@@ -154,47 +153,37 @@ def main():
     listing_visti = carica_listing_visti()
     print(f"📚 Listing già monitorati: {len(listing_visti)}\n")
     
-    ciclo = 0
-    while True:
-        ciclo += 1
-        print(f"\n{'='*70}")
-        print(f"🔄 CICLO {ciclo} - {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}")
-        print(f"{'='*70}")
-        
-        print("🌐 Download pagina Immobiliare.it...")
-        html = scrape_immobiliare()
-        if not html:
-            print("⏳ Riprovo tra 5 minuti...")
-            time.sleep(300)
-            continue
-        
-        print("✅ Pagina scaricata")
-        print("📊 Parsing dei listing...")
-        listings = parse_listings(html)
-        print(f"   📄 Total listing trovati: {len(listings)}")
-        
-        nuovi = 0
-        for listing in listings:
-            if listing['id'] not in listing_visti:
-                print(f"\n   🆕 NUOVO LISTING:")
-                print(f"      Titolo: {listing['title'][:60]}")
-                print(f"      Prezzo: €{listing['price']:,}")
-                print(f"      Mq: {listing['mq']} | Camere: {listing['rooms'] if listing['rooms'] > 0 else 'N/A'}")
-                
-                invia_telegram(listing)
-                listing_visti.add(listing['id'])
-                nuovi += 1
-                time.sleep(2)
-        
-        if nuovi > 0:
-            print(f"\n📬 TOTALE MESSAGGI INVIATI: {nuovi}")
-            salva_listing_visti(listing_visti)
-        else:
-            print(f"\n😴 Nessun nuovo listing trovato")
-        
-        print(f"\n⏳ Prossima ricerca tra 5 minuti...")
-        print(f"   (il bot continuerà a girare in background)")
-        time.sleep(300)
+    print("🌐 Download pagina Immobiliare.it...")
+    html = scrape_immobiliare()
+    if not html:
+        print("❌ Errore nel download")
+        return
+    
+    print("✅ Pagina scaricata")
+    
+    print("📊 Parsing dei listing...")
+    listings = parse_listings(html)
+    print(f"   📄 Total listing trovati: {len(listings)}")
+    
+    nuovi = 0
+    for listing in listings:
+        if listing['id'] not in listing_visti:
+            print(f"\n   🆕 NUOVO LISTING:")
+            print(f"      Titolo: {listing['title'][:60]}")
+            print(f"      Prezzo: €{listing['price']:,}")
+            print(f"      Mq: {listing['mq']} | Camere: {listing['rooms'] if listing['rooms'] > 0 else 'N/A'}")
+            
+            invia_telegram(listing)
+            listing_visti.add(listing['id'])
+            nuovi += 1
+    
+    if nuovi > 0:
+        print(f"\n📬 TOTALE MESSAGGI INVIATI: {nuovi}")
+        salva_listing_visti(listing_visti)
+    else:
+        print(f"\n😴 Nessun nuovo listing trovato")
+    
+    print(f"\n✅ Esecuzione completata! Il bot girerà di nuovo tra 5 minuti.")
 
 if __name__ == "__main__":
     main()
