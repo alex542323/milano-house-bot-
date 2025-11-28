@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import json
 import os
 import time
@@ -14,8 +15,10 @@ import logging
 # Disable warnings
 requests.packages.urllib3.disable_warnings()
 
+# === USING LITERAL TOKEN & CHAT ID (as requested) ===
 TELEGRAM_TOKEN = "7977881088:AAEr1JHIEdvd-kiXFyONscQg4HJkqzBr4bA"
 CHAT_ID = "660849220"
+# ===================================================
 
 # LINK DA SCRAPARE
 SCRAPE_LINKS = {
@@ -337,20 +340,23 @@ class AntiBlockBot:
         
         try:
             url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-            params = {
+            payload = {
                 'chat_id': CHAT_ID,
                 'text': text_message,
                 'parse_mode': 'HTML',
-                'disable_web_page_preview': 'false'
+                'disable_web_page_preview': False
             }
-            response = requests.post(url, params=params, timeout=10)
+            # Send JSON payload (works cleanly)
+            response = requests.post(url, json=payload, timeout=10)
             
             if response.status_code == 200:
                 print(f"   ✅ Telegram: {listing['title'][:40]}")
                 return True
+            else:
+                print(f"   ❌ Telegram failed {response.status_code}: {response.text[:200]}")
         
         except Exception as e:
-            print(f"   ❌ Telegram: {str(e)[:50]}")
+            print(f"   ❌ Telegram: {str(e)[:200]}")
         
         return False
     
@@ -367,8 +373,8 @@ class AntiBlockBot:
     def save_seen_listings(self, seen):
         """Salva listing inviati"""
         try:
-            with open('listing_visti.json', 'w') as f:
-                json.dump(list(seen), f)
+            with open('listing_visti.json', 'w', encoding='utf-8') as f:
+                json.dump(list(seen), f, ensure_ascii=False, indent=2)
         except:
             pass
     
