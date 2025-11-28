@@ -9,21 +9,24 @@ TELEGRAM_TOKEN = "7977881088:AAEr1JHIEdvd-kiXFyONscQg4HJkqzBr4bA"
 CHAT_ID = "660849220"
 
 def scrape_immobiliare():
-    url = "https://www.immobiliare.it/vendita-case/milano/con-riscaldamento-autonomo/?prezzoMassimo=400000&superficieMinima=80&localiMinimo=3&tipoProprieta=1"
+    url = "https://www.immobiliare.it/vendita-case/milano/?prezzoMassimo=400000&superficieMinima=80&localiMinimo=3"
     
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'it-IT,it;q=0.9',
-        'Accept-Encoding': 'gzip, deflate',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'it-IT,it;q=0.9,en;q=0.8',
+        'Accept-Encoding': 'gzip, deflate, br',
         'DNT': '1',
         'Connection': 'keep-alive',
         'Upgrade-Insecure-Requests': '1',
-        'Referer': 'https://www.immobiliare.it/'
+        'Referer': 'https://www.immobiliare.it/',
+        'sec-fetch-dest': 'document',
+        'sec-fetch-mode': 'navigate',
+        'sec-fetch-site': 'same-origin',
     }
     
     try:
-        response = requests.get(url, headers=headers, timeout=20)
+        response = requests.get(url, headers=headers, timeout=20, allow_redirects=True)
         response.raise_for_status()
         print(f"✅ Download riuscito (Status: {response.status_code})")
         return response.text
@@ -32,7 +35,6 @@ def scrape_immobiliare():
         return None
 
 def extract_images(item):
-    """Estrae gli URL delle immagini dal card"""
     images = []
     try:
         img_elements = item.find_all('img')
@@ -46,7 +48,6 @@ def extract_images(item):
         return []
 
 def parse_listings(html):
-    """Estrae i listing dalla pagina HTML"""
     if not html:
         return []
     
@@ -139,7 +140,6 @@ def parse_listings(html):
         return []
 
 def invia_telegram(listing):
-    """Invia messaggio con foto a Telegram"""
     text_message = f"""🏠 <b>NUOVO LISTING TROVATO!</b>
 
 <b>{listing['title']}</b>
@@ -200,7 +200,6 @@ def invia_telegram(listing):
         return False
 
 def carica_listing_visti():
-    """Carica i listing già visti da un file"""
     try:
         if os.path.exists('listing_visti.json'):
             with open('listing_visti.json', 'r') as f:
@@ -210,7 +209,6 @@ def carica_listing_visti():
     return set()
 
 def salva_listing_visti(visti):
-    """Salva i listing visti su file"""
     try:
         with open('listing_visti.json', 'w') as f:
             json.dump(list(visti), f)
@@ -222,8 +220,8 @@ def main():
     print("🚀 BOT HOUSE FINDER MILANO AVVIATO!")
     print("=" * 70)
     print(f"⏰ Ora: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}")
-    print(f"🔗 URL: https://www.immobiliare.it/vendita-case/milano/con-riscaldamento-autonomo/")
-    print(f"   Filtri: Prezzo max €400k, Mq min 80, Min 3 locali, Riscaldamento autonomo")
+    print(f"🔗 URL: https://www.immobiliare.it/vendita-case/milano/")
+    print(f"   Filtri: Prezzo max €400k, Mq min 80, Min 3 locali")
     print(f"📸 Foto: SI - Tutte le immagini disponibili")
     print("=" * 70)
     
