@@ -1,9 +1,10 @@
-import requests
+import cloudscraper
 from bs4 import BeautifulSoup
 from datetime import datetime
 import json
 import os
 import re
+import time
 
 TELEGRAM_TOKEN = "7977881088:AAEr1JHIEdvd-kiXFyONscQg4HJkqzBr4bA"
 CHAT_ID = "660849220"
@@ -11,25 +12,9 @@ CHAT_ID = "660849220"
 def scrape_immobiliare():
     url = "https://www.immobiliare.it/vendita-case/milano/?prezzoMassimo=400000&superficieMinima=80&localiMinimo=3"
     
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9',
-        'Accept-Language': 'it-IT,it;q=0.9',
-        'Accept-Encoding': 'gzip, deflate, br',
-        'Cache-Control': 'max-age=0',
-        'Upgrade-Insecure-Requests': '1',
-        'Sec-Fetch-Dest': 'document',
-        'Sec-Fetch-Mode': 'navigate',
-        'Sec-Fetch-Site': 'none',
-        'Sec-Fetch-User': '?1',
-        'Pragma': 'no-cache',
-        'Cookie': 'OptanonAlertBoxClosed=2024-01-01T00:00:00Z',
-    }
-    
     try:
-        session = requests.Session()
-        session.headers.update(headers)
-        response = session.get(url, timeout=30, allow_redirects=True, verify=True)
+        scraper = cloudscraper.create_scraper()
+        response = scraper.get(url, timeout=30)
         response.raise_for_status()
         print(f"✅ Download riuscito (Status: {response.status_code})")
         return response.text
@@ -158,6 +143,7 @@ def invia_telegram(listing):
 ⏰ {listing['timestamp']}"""
     
     try:
+        import requests
         if listing['images'] and len(listing['images']) > 0:
             media_group = []
             for idx, img_url in enumerate(listing['images'][:10]):
@@ -191,6 +177,7 @@ def invia_telegram(listing):
             'parse_mode': 'HTML',
             'disable_web_page_preview': 'true'
         }
+        import requests
         response = requests.post(url, params=params, timeout=10)
         if response.status_code == 200:
             print(f"   ✅ Messaggio inviato: {listing['title'][:50]}")
@@ -254,6 +241,7 @@ def main():
             invia_telegram(listing)
             listing_visti.add(listing['id'])
             nuovi += 1
+            time.sleep(1)
     
     if nuovi > 0:
         print(f"\n📬 TOTALE MESSAGGI INVIATI: {nuovi}")
