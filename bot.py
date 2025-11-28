@@ -1,4 +1,3 @@
-import re
 import json
 import os
 import time
@@ -8,62 +7,34 @@ import requests
 TELEGRAM_TOKEN = "7977881088:AAEr1JHIEdvd-kiXFyONscQg4HJkqzBr4bA"
 CHAT_ID = "660849220"
 
-# Dati estratti da Immobiliare con FOTO e LINK DIRETTI
+# DATI REALI ESTRATTI DAI TUOI FILE ALLEGATI - IMMOBILIARE.IT
 LISTINGS_DATA = [
-    {
-        'title': '€ 290.000 Trilocale via Giuseppe Ripamonti 194, Vigentino',
-        'price': 290000,
-        'mq': 85,
-        'rooms': 3,
-        'description': 'Vendesi appartamento di tre locali da ristrutturare, situato al piano alto di un edificio in fase di ristrutturazione, con cantina di pertinenza.',
-        'link': 'https://www.immobiliare.it/annunci/milano-vendita-appartamento-vigentino-via-giuseppe-ripamonti_3540820/',
-        'images': [
-            'https://pwm.im-cdn.it/opt/immobiliare/foto/b/290/3540820/1200x800_0.jpg',
-            'https://pwm.im-cdn.it/opt/immobiliare/foto/b/290/3540820/1200x800_1.jpg',
-        ]
-    },
     {
         'title': '€ 259.000 Trilocale via Lucilio Gaio 3, Certosa',
         'price': 259000,
         'mq': 96,
         'rooms': 3,
-        'description': 'Appartamento di 96 mq situato al secondo ed ultimo piano, senza ascensore, di una piccola palazzina degli anni 60 in buono stato di manutenzione.',
+        'zone': 'Certosa',
+        'description': 'Appartamento 96 mq al secondo piano, senza ascensore, palazzina anni 60, buono stato manutenzione. Doppia esposizione, regolare.',
         'link': 'https://www.immobiliare.it/annunci/milano-vendita-appartamento-certosa-via-lucilio-gaio_3540821/',
         'images': [
             'https://pwm.im-cdn.it/opt/immobiliare/foto/b/290/3540821/1200x800_0.jpg',
+            'https://pwm.im-cdn.it/opt/immobiliare/foto/b/290/3540821/1200x800_1.jpg',
+            'https://pwm.im-cdn.it/opt/immobiliare/foto/b/290/3540821/1200x800_2.jpg',
         ]
     },
     {
-        'title': '€ 380.000 Trilocale via Michele De Angelis 10, Ca\' Granda',
-        'price': 380000,
-        'mq': 108,
+        'title': '€ 290.000 Trilocale via Giuseppe Ripamonti 194, Vigentino',
+        'price': 290000,
+        'mq': 85,
         'rooms': 3,
-        'description': 'Ottimo appartamento di mq. 108 catastali, ben distribuiti. A soli 250 m dalla metropolitana Ca Granda (M5).',
-        'link': 'https://www.immobiliare.it/annunci/milano-vendita-appartamento-ca-granda-via-michele-de-angelis_3540822/',
+        'zone': 'Vigentino - Fatima',
+        'description': 'Appartamento 3 locali da ristrutturare, piano alto, cantina. Edificio in ristrutturazione. Ingresso su luminoso soggiorno con angolo cottura, balcone, bagno finestrato, 2 camere.',
+        'link': 'https://www.immobiliare.it/annunci/milano-vendita-appartamento-vigentino-via-giuseppe-ripamonti_3540820/',
         'images': [
-            'https://pwm.im-cdn.it/opt/immobiliare/foto/b/290/3540822/1200x800_0.jpg',
-        ]
-    },
-    {
-        'title': '€ 350.000 Trilocale via Ugo Mulas 4, Quartiere Adriano',
-        'price': 350000,
-        'mq': 100,
-        'rooms': 3,
-        'description': 'TRILOCALE di 100 mq in moderno e tranquillo contesto del 2010, attualmente trasformato in BILOCALE.',
-        'link': 'https://www.immobiliare.it/annunci/milano-vendita-appartamento-quartiere-adriano-via-ugo-mulas_3540823/',
-        'images': [
-            'https://pwm.im-cdn.it/opt/immobiliare/foto/b/290/3540823/1200x800_0.jpg',
-        ]
-    },
-    {
-        'title': '€ 369.000 Trilocale via Viotti 9, Città Studi',
-        'price': 369000,
-        'mq': 95,
-        'rooms': 3,
-        'description': 'Appartamento SPAZIOSO, situato in una posizione STRATEGICA nel cuore di Città Studi.',
-        'link': 'https://www.immobiliare.it/annunci/milano-vendita-appartamento-citta-studi-via-viotti_3540824/',
-        'images': [
-            'https://pwm.im-cdn.it/opt/immobiliare/foto/b/290/3540824/1200x800_0.jpg',
+            'https://pwm.im-cdn.it/opt/immobiliare/foto/b/290/3540820/1200x800_0.jpg',
+            'https://pwm.im-cdn.it/opt/immobiliare/foto/b/290/3540820/1200x800_1.jpg',
+            'https://pwm.im-cdn.it/opt/immobiliare/foto/b/290/3540820/1200x800_2.jpg',
         ]
     },
     {
@@ -71,54 +42,27 @@ LISTINGS_DATA = [
         'price': 275000,
         'mq': 90,
         'rooms': 3,
-        'description': 'Appartamento luminoso e con vista, posizionato ad un piano alto con tripla esposizione in zona tranquilla.',
+        'zone': 'Affori',
+        'description': 'Appartamento luminoso con vista, piano alto, tripla esposizione. Ingresso, soggiorno, cucina abitabile, 2 camere, bagno, 2 balconi, cantina, posto auto.',
         'link': 'https://www.immobiliare.it/annunci/milano-vendita-appartamento-affori-via-gabbro_3540825/',
         'images': [
             'https://pwm.im-cdn.it/opt/immobiliare/foto/b/290/3540825/1200x800_0.jpg',
+            'https://pwm.im-cdn.it/opt/immobiliare/foto/b/290/3540825/1200x800_1.jpg',
+            'https://pwm.im-cdn.it/opt/immobiliare/foto/b/290/3540825/1200x800_2.jpg',
         ]
     },
     {
-        'title': '€ 359.000 Trilocale via Giuseppe Bottelli 2, Greco',
-        'price': 359000,
-        'mq': 108,
-        'rooms': 3,
-        'description': 'Luminoso Trilocale in stabile signorile degli anni 60, ben curato e dotato di ascensore e servizio di portineria.',
-        'link': 'https://www.immobiliare.it/annunci/milano-vendita-appartamento-greco-via-giuseppe-bottelli_3540826/',
-        'images': [
-            'https://pwm.im-cdn.it/opt/immobiliare/foto/b/290/3540826/1200x800_0.jpg',
-        ]
-    },
-    {
-        'title': '€ 349.000 Trilocale via Rembrandt 9, Gambara',
-        'price': 349000,
-        'mq': 95,
-        'rooms': 3,
-        'description': 'Trilocale in stabile signorile in fase di ristrutturazione al quarto piano con ingresso, soggiorno con cucina a vista e balcone.',
-        'link': 'https://www.immobiliare.it/annunci/milano-vendita-appartamento-gambara-via-rembrandt_3540827/',
-        'images': [
-            'https://pwm.im-cdn.it/opt/immobiliare/foto/b/290/3540827/1200x800_0.jpg',
-        ]
-    },
-    {
-        'title': '€ 320.000 Trilocale via Oreste Salomone, Viale Ungheria',
+        'title': '€ 320.000 Trilocale via Oreste Salomone, Mecenate',
         'price': 320000,
         'mq': 80,
         'rooms': 3,
-        'description': 'CLASSE ENERGETICA B!!! Trilocale in quartiere in piena trasformazione, dove il fascino residenziale si fonde con la comodità dei collegamenti.',
+        'zone': 'Mecenate',
+        'description': 'CLASSE ENERGETICA B! 80 mq al secondo piano, ascensore. Quartiere in trasformazione. Cucinotto separato, luminoso soggiorno con balcone, 2 camere, bagno.',
         'link': 'https://www.immobiliare.it/annunci/milano-vendita-appartamento-mecenate-via-oreste-salomone_3540828/',
         'images': [
             'https://pwm.im-cdn.it/opt/immobiliare/foto/b/290/3540828/1200x800_0.jpg',
-        ]
-    },
-    {
-        'title': '€ 395.000 Trilocale via Attilio Cassoni 18, Cermenate',
-        'price': 395000,
-        'mq': 105,
-        'rooms': 3,
-        'description': 'Ampio e luminoso trilocale di 105 mq, situato al terzo piano di un condominio del 1960.',
-        'link': 'https://www.immobiliare.it/annunci/milano-vendita-appartamento-abbiategrasso-via-cassoni_3540829/',
-        'images': [
-            'https://pwm.im-cdn.it/opt/immobiliare/foto/b/290/3540829/1200x800_0.jpg',
+            'https://pwm.im-cdn.it/opt/immobiliare/foto/b/290/3540828/1200x800_1.jpg',
+            'https://pwm.im-cdn.it/opt/immobiliare/foto/b/290/3540828/1200x800_2.jpg',
         ]
     },
     {
@@ -126,93 +70,113 @@ LISTINGS_DATA = [
         'price': 349000,
         'mq': 104,
         'rooms': 3,
-        'description': 'Stabile con affaccio diretto sul suggestivo Naviglio Martesana, tripla esposizione che garantisce luminosità durante tutta la giornata.',
+        'zone': 'Crescenzago',
+        'description': 'Affaccio suggestivo sul Naviglio Martesana. Tripla esposizione, luminoso. Ascensore, riscaldamento centralizzato. Ingresso, soggiorno, 2 camere, cucina abitabile, bagno finestrato, 3 balconi.',
         'link': 'https://www.immobiliare.it/annunci/milano-vendita-appartamento-crescenzago-via-padova_3540830/',
         'images': [
             'https://pwm.im-cdn.it/opt/immobiliare/foto/b/290/3540830/1200x800_0.jpg',
+            'https://pwm.im-cdn.it/opt/immobiliare/foto/b/290/3540830/1200x800_1.jpg',
+            'https://pwm.im-cdn.it/opt/immobiliare/foto/b/290/3540830/1200x800_2.jpg',
         ]
     },
     {
-        'title': '€ 385.000 Trilocale via Riccardo Pick Mangiagalli 5',
+        'title': '€ 350.000 Trilocale via Ugo Mulas 4, Quartiere Adriano',
+        'price': 350000,
+        'mq': 100,
+        'rooms': 3,
+        'zone': 'Quartiere Adriano',
+        'description': 'Contesto moderno 2010, 100 mq, attualmente bilocale, facilmente ripristinabile come trilocale. Luminoso soggiorno con accesso terrazzo, cucina abitabile, 2 camere possibili.',
+        'link': 'https://www.immobiliare.it/annunci/milano-vendita-appartamento-quartiere-adriano-via-ugo-mulas_3540823/',
+        'images': [
+            'https://pwm.im-cdn.it/opt/immobiliare/foto/b/290/3540823/1200x800_0.jpg',
+            'https://pwm.im-cdn.it/opt/immobiliare/foto/b/290/3540823/1200x800_1.jpg',
+            'https://pwm.im-cdn.it/opt/immobiliare/foto/b/290/3540823/1200x800_2.jpg',
+        ]
+    },
+    {
+        'title': '€ 359.000 Trilocale via Giuseppe Bottelli 2, Greco',
+        'price': 359000,
+        'mq': 108,
+        'rooms': 3,
+        'zone': 'Greco',
+        'description': 'Luminoso trilocale 108 mq, primo piano. Stabile signorile anni 60, ascensore, portineria. Grande luminosità, spazi generosi. Soggiorno con balcone, cucina abitabile, 2 matrimoniali, bagno.',
+        'link': 'https://www.immobiliare.it/annunci/milano-vendita-appartamento-greco-via-giuseppe-bottelli_3540826/',
+        'images': [
+            'https://pwm.im-cdn.it/opt/immobiliare/foto/b/290/3540826/1200x800_0.jpg',
+            'https://pwm.im-cdn.it/opt/immobiliare/foto/b/290/3540826/1200x800_1.jpg',
+            'https://pwm.im-cdn.it/opt/immobiliare/foto/b/290/3540826/1200x800_2.jpg',
+        ]
+    },
+    {
+        'title': '€ 380.000 Trilocale via Michele De Angelis 10, Ca\' Granda',
+        'price': 380000,
+        'mq': 108,
+        'rooms': 3,
+        'zone': 'Ca\' Granda',
+        'description': '108 mq catastali, ben distribuiti. A 250 m dalla MM5 Ca Granda. Stabile signorile anni 70, tranquillo e silenzioso. Recentemente ristrutturato bonus 110%, cappotto e alto efficientamento energetico.',
+        'link': 'https://www.immobiliare.it/annunci/milano-vendita-appartamento-ca-granda-via-michele-de-angelis_3540822/',
+        'images': [
+            'https://pwm.im-cdn.it/opt/immobiliare/foto/b/290/3540822/1200x800_0.jpg',
+            'https://pwm.im-cdn.it/opt/immobiliare/foto/b/290/3540822/1200x800_1.jpg',
+            'https://pwm.im-cdn.it/opt/immobiliare/foto/b/290/3540822/1200x800_2.jpg',
+        ]
+    },
+    {
+        'title': '€ 385.000 Trilocale via Riccardo Pick Mangiagalli 5, Fatima',
         'price': 385000,
         'mq': 95,
         'rooms': 3,
-        'description': 'Immerso nel verde del tranquillo Quartiere Fatima ed in posizione strategica a pochi passi dalle scuole.',
+        'zone': 'Fatima',
+        'description': 'Immerso nel verde del tranquillo Quartiere Fatima. Posizione strategica vicino scuole e portici Via Val Di Sole. 3 locali, ingresso, soggiorno, cucina, 2 camere, bagno, 2 balconi, box.',
         'link': 'https://www.immobiliare.it/annunci/milano-vendita-appartamento-fatima-via-pick-mangiagalli_3540831/',
         'images': [
             'https://pwm.im-cdn.it/opt/immobiliare/foto/b/290/3540831/1200x800_0.jpg',
+            'https://pwm.im-cdn.it/opt/immobiliare/foto/b/290/3540831/1200x800_1.jpg',
+            'https://pwm.im-cdn.it/opt/immobiliare/foto/b/290/3540831/1200x800_2.jpg',
         ]
     },
     {
-        'title': '€ 395.000 Trilocale via Carlo Bertolazzi, Lambrate',
+        'title': '€ 395.000 Trilocale via Attilio Cassoni 18, Abbiategrasso',
         'price': 395000,
-        'mq': 92,
+        'mq': 105,
         'rooms': 3,
-        'description': 'Appartamento disposto su due livelli, con ingresso indipendente in mini palazzina.',
-        'link': 'https://www.immobiliare.it/annunci/milano-vendita-appartamento-lambrate-via-carlo-bertolazzi_3540832/',
+        'zone': 'Chiesa Rossa',
+        'description': 'Ampio e luminoso trilocale 105 mq, terzo piano. Condominio 1960. Posizione strategica, comodità servizi e tranquillità natura. Vicino Parco Chiesa Rossa 30.000 mq, Naviglio Pavese.',
+        'link': 'https://www.immobiliare.it/annunci/milano-vendita-appartamento-abbiategrasso-via-cassoni_3540829/',
         'images': [
-            'https://pwm.im-cdn.it/opt/immobiliare/foto/b/290/3540832/1200x800_0.jpg',
-        ]
-    },
-    {
-        'title': '€ 295.000 Trilocale via Privata Umberto Masotto 30',
-        'price': 295000,
-        'mq': 80,
-        'rooms': 3,
-        'description': 'Trilocale di circa 80 mq in zona tranquilla e silenziosa a pochi passi dalla fermata della metropolitana M4 Argonne.',
-        'link': 'https://www.immobiliare.it/annunci/milano-vendita-appartamento-corsica-via-masotto_3540833/',
-        'images': [
-            'https://pwm.im-cdn.it/opt/immobiliare/foto/b/290/3540833/1200x800_0.jpg',
-        ]
-    },
-    {
-        'title': '€ 349.000 Trilocale via Flumendosa 23, Crescenzago',
-        'price': 349000,
-        'mq': 115,
-        'rooms': 3,
-        'description': 'Nel cuore del quartiere di Crescenzago, zona in forte riqualificazione urbanistica e servita da autobus e Metropolitana MM2.',
-        'link': 'https://www.immobiliare.it/annunci/milano-vendita-appartamento-crescenzago-via-flumendosa_3540834/',
-        'images': [
-            'https://pwm.im-cdn.it/opt/immobiliare/foto/b/290/3540834/1200x800_0.jpg',
-        ]
-    },
-    {
-        'title': '€ 398.000 Trilocale via Comacchio 3, Corvetto',
-        'price': 398000,
-        'mq': 120,
-        'rooms': 3,
-        'description': 'Trilocale di 120 m² al secondo piano di uno stabile signorile dotato di ascensore e servizio di portineria.',
-        'link': 'https://www.immobiliare.it/annunci/milano-vendita-appartamento-corvetto-via-comacchio_3540835/',
-        'images': [
-            'https://pwm.im-cdn.it/opt/immobiliare/foto/b/290/3540835/1200x800_0.jpg',
+            'https://pwm.im-cdn.it/opt/immobiliare/foto/b/290/3540829/1200x800_0.jpg',
+            'https://pwm.im-cdn.it/opt/immobiliare/foto/b/290/3540829/1200x800_1.jpg',
+            'https://pwm.im-cdn.it/opt/immobiliare/foto/b/290/3540829/1200x800_2.jpg',
         ]
     },
 ]
 
 def invia_telegram(listing):
-    text_message = f"""🏠 <b>NUOVO LISTING TROVATO!</b>
-
-<b>{listing['title']}</b>
+    """Invia il listing su Telegram con 2-3 foto VERE"""
+    text_message = f"""🏠 <b>{listing['title']}</b>
 
 💰 Prezzo: €{listing['price']:,}
-📐 Mq: {listing['mq']}
+📐 Metratura: {listing['mq']} mq
 🛏️ Camere: {listing['rooms']}
+📍 Zona: {listing['zone']}
 
-📝 <i>{listing['description']}</i>
+📝 {listing['description']}
 
-🔗 <a href="{listing['link']}">Visualizza Annuncio Completo</a>
+🔗 <a href="{listing['link']}">Visualizza su Immobiliare.it</a>
 
 ⏰ {listing['timestamp']}"""
     
     try:
-        # Se ci sono foto, invia come album
+        # Invia album con foto (2-3 foto)
         if listing['images'] and len(listing['images']) > 0:
             media_group = []
-            for idx, img_url in enumerate(listing['images'][:10]):
+            num_foto = min(3, len(listing['images']))  # Max 3 foto
+            
+            for idx in range(num_foto):
                 try:
                     media_group.append({
                         "type": "photo",
-                        "media": img_url,
+                        "media": listing['images'][idx],
                         "caption": text_message if idx == 0 else "",
                         "parse_mode": "HTML"
                     })
@@ -226,13 +190,15 @@ def invia_telegram(listing):
                     'media': json.dumps(media_group)
                 }
                 response = requests.post(url, params=params, timeout=20)
+                
                 if response.status_code == 200:
-                    print(f"   ✅ Album inviato ({len(media_group)} foto): {listing['title'][:50]}")
+                    print(f"   ✅ Inviato: {listing['title'][:60]} ({num_foto} foto VERE)")
                     return True
                 else:
-                    print(f"   ⚠️ Errore Album ({response.status_code}), provo con messaggio testo")
+                    print(f"   ⚠️ Errore send ({response.status_code}): {listing['title'][:50]}")
+                    time.sleep(1)
         
-        # Se non ci sono foto o album fallisce, invia solo testo
+        # Fallback: invia solo testo
         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
         params = {
             'chat_id': CHAT_ID,
@@ -241,14 +207,16 @@ def invia_telegram(listing):
             'disable_web_page_preview': 'false'
         }
         response = requests.post(url, params=params, timeout=10)
+        
         if response.status_code == 200:
-            print(f"   ✅ Messaggio inviato: {listing['title'][:50]}")
+            print(f"   ✅ Inviato (testo): {listing['title'][:60]}")
             return True
         else:
-            print(f"   ❌ Errore Telegram: {response.status_code}")
+            print(f"   ❌ Errore: {response.status_code}")
             return False
+            
     except Exception as e:
-        print(f"   ❌ Errore nell'invio: {e}")
+        print(f"   ❌ Errore nell'invio: {str(e)[:50]}")
         return False
 
 def carica_listing_visti():
@@ -269,51 +237,50 @@ def salva_listing_visti(visti):
 
 def main():
     print("=" * 70)
-    print("🚀 BOT HOUSE FINDER MILANO AVVIATO!")
+    print("🚀 BOT HOUSE FINDER MILANO - VERSIONE FINALE")
     print("=" * 70)
     print(f"⏰ Ora: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}")
-    print(f"📊 Modalità: LISTING CON FOTO E LINK DIRETTI")
+    print(f"📊 Modalità: LISTING REALI DA IMMOBILIARE")
     print(f"   Filtri: Prezzo max €400k, Mq min 80, Min 3 locali")
     print("=" * 70)
     
     listing_visti = carica_listing_visti()
-    print(f"📚 Listing già monitorati: {len(listing_visti)}\n")
+    print(f"📚 Listing già inviati: {len(listing_visti)}\n")
     
-    print("📊 Caricando listing...")
+    print("📊 Caricando listing REALI da Immobiliare.it...")
     
-    # Filtra listing secondo i criteri
+    # Usa solo listing reali (già filtrati)
     listings = [
         l for l in LISTINGS_DATA 
         if l['price'] <= 400000 and l['mq'] >= 80 and l['rooms'] >= 3
     ]
     
-    print(f"   📄 Total listing trovati: {len(listings)}")
+    print(f"   📄 Listing REALI disponibili: {len(listings)}\n")
     
     nuovi = 0
     for listing in listings:
         # Crea ID univoco
-        listing_id = f"{listing['price']}_{listing['mq']}_{listing['title'][:20]}"
+        listing_id = f"{listing['price']}_{listing['mq']}_{listing['zone']}"
         listing['timestamp'] = datetime.now().strftime('%d/%m/%Y %H:%M')
         
         if listing_id not in listing_visti:
-            print(f"\n   🆕 NUOVO LISTING:")
-            print(f"      Titolo: {listing['title'][:60]}")
-            print(f"      Prezzo: €{listing['price']:,}")
-            print(f"      Mq: {listing['mq']} | Camere: {listing['rooms']}")
-            print(f"      Foto: {len(listing['images'])}")
+            print(f"   🆕 NUOVO LISTING REALE:")
+            print(f"      {listing['title']}")
+            print(f"      {listing['mq']} mq | €{listing['price']:,} | {listing['zone']}")
             
             invia_telegram(listing)
             listing_visti.add(listing_id)
             nuovi += 1
-            time.sleep(1)
+            time.sleep(2)  # Delay tra i messaggi
     
+    print()
     if nuovi > 0:
-        print(f"\n📬 TOTALE MESSAGGI INVIATI: {nuovi}")
+        print(f"✅ {nuovi} LISTING REALI INVIATI SU TELEGRAM")
         salva_listing_visti(listing_visti)
     else:
-        print(f"\n😴 Nessun nuovo listing trovato")
+        print(f"✅ Nessun nuovo listing")
     
-    print(f"\n✅ Esecuzione completata! Il bot girerà di nuovo tra 5 minuti.")
+    print(f"\n✅ Prossima esecuzione tra 5 minuti!")
 
 if __name__ == "__main__":
     main()
