@@ -10,7 +10,16 @@ CHAT_ID = "660849220"
 
 def scrape_immobiliare():
     url = "https://www.immobiliare.it/vendita-case/milano/con-riscaldamento-autonomo/?prezzoMassimo=400000&superficieMinima=80&localiMinimo=3&tipoProprieta=1"
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+   headers = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    'Accept-Language': 'it-IT,it;q=0.9',
+    'Accept-Encoding': 'gzip, deflate',
+    'DNT': '1',
+    'Connection': 'keep-alive',
+    'Upgrade-Insecure-Requests': '1',
+    'Referer': 'https://www.immobiliare.it/'
+}
     try:
         response = requests.get(url, headers=headers, timeout=15)
         response.raise_for_status()
