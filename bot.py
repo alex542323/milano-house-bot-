@@ -19,6 +19,20 @@ def scrape_immobiliare():
         print(f"❌ Errore nel download: {e}")
         return None
 
+def extract_images(item):
+    """Estrae gli URL delle immagini dal card"""
+    images = []
+    try:
+        img_elements = item.find_all('img')
+        for img in img_elements:
+            img_url = img.get('src') or img.get('data-src')
+            if img_url and 'immobiliare' in img_url.lower():
+                if img_url not in images:
+                    images.append(img_url)
+        return images[:10]
+    except:
+        return []
+
 def parse_listings(html):
     if not html:
         return []
@@ -70,6 +84,7 @@ def parse_listings(html):
                 full_text = (title + " " + description).lower()
                 if 'nuda propriet' in full_text or 'nuda proprietà' in full_text:
                     continue
+                images = extract_images(item)
                 listing = {
                     'id': listing_id,
                     'title': title,
@@ -78,6 +93,7 @@ def parse_listings(html):
                     'rooms': rooms,
                     'description': description[:200],
                     'link': link,
+                    'images': images,
                     'timestamp': datetime.now().strftime('%d/%m/%Y %H:%M')
                 }
                 listings.append(listing)
@@ -90,8 +106,8 @@ def parse_listings(html):
         return []
 
 def invia_telegram(listing):
-    message = f"""
-🏠 <b>NUOVO LISTING TROVATO!</b>
+    """Invia messaggio con tutte le foto"""
+    text_message = f"""🏠 <b>NUOVO LISTING TROVATO!</b>
 
 <b>{listing['title']}</b>
 
@@ -103,16 +119,42 @@ def invia_telegram(listing):
 
 🔗 <a href="{listing['link']}">Visualizza Annuncio Completo</a>
 
-⏰ {listing['timestamp']}
-    """
-    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    params = {
-        'chat_id': CHAT_ID,
-        'text': message,
-        'parse_mode': 'HTML',
-        'disable_web_page_preview': 'true'
-    }
+⏰ {listing['timestamp']}"""
+    
     try:
+        if listing['images']:
+            media_group = []
+            for idx, img_url in enumerate(listing['images']):
+                try:
+                    media_group.append({
+                        "type": "photo",
+                        "media": img_url,
+                        "caption": text_message if idx == 0 else "",
+                        "parse_mode": "HTML"
+                    })
+                except:
+                    continue
+            
+            if media_group:
+                url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMediaGroup"
+                params = {
+                    'chat_id': CHAT_ID,
+                    'media': json.dumps(media_group)
+                }
+                response = requests.post(url, params=params, timeout=15)
+                if response.status_code == 200:
+                    print(f"   ✅ Album inviato ({len(media_group)} foto): {listing['title'][:40]}")
+                    return True
+                else:
+                    print(f"   ⚠️ Errore Album, provo con messaggio testo")
+        
+        url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+        params = {
+            'chat_id': CHAT_ID,
+            'text': text_message,
+            'parse_mode': 'HTML',
+            'disable_web_page_preview': 'true'
+        }
         response = requests.post(url, params=params, timeout=10)
         if response.status_code == 200:
             print(f"   ✅ Messaggio inviato: {listing['title'][:50]}")
@@ -145,9 +187,9 @@ def main():
     print("🚀 BOT HOUSE FINDER MILANO AVVIATO!")
     print("=" * 70)
     print(f"⏰ Ora: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}")
-    print(f"🔗 URL: https://www.immobiliare.it/vendita-case/milano/")
-    print(f"   Filtri: Prezzo max €400k, Mq min 60, Min 3 locali")
-    print(f"🚫 Escluse: Nuda proprietà")
+    print(f"🔗 URL: https://www.immobiliare.it/vendita-case/milano/con-riscaldamento-autonomo/")
+    print(f"   Filtri: Prezzo max €400k, Mq min 80, Min 3 locali, Riscaldamento autonomo")
+    print(f"📸 Foto: SI - Tutte le immagini disponibili")
     print("=" * 70)
     
     listing_visti = carica_listing_visti()
@@ -160,7 +202,6 @@ def main():
         return
     
     print("✅ Pagina scaricata")
-    
     print("📊 Parsing dei listing...")
     listings = parse_listings(html)
     print(f"   📄 Total listing trovati: {len(listings)}")
@@ -172,6 +213,7 @@ def main():
             print(f"      Titolo: {listing['title'][:60]}")
             print(f"      Prezzo: €{listing['price']:,}")
             print(f"      Mq: {listing['mq']} | Camere: {listing['rooms'] if listing['rooms'] > 0 else 'N/A'}")
+            print(f"      Foto: {len(listing['images'])}")
             
             invia_telegram(listing)
             listing_visti.add(listing['id'])
