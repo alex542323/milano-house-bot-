@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Playwright-based scraper that loads JS pages, extracts listings and sends them to Telegram.
-This file intentionally uses the literal TELEGRAM_TOKEN and CHAT_ID (as requested).
+Playwright-based scraper with a site-specific extractor for Immobiliare.it
+and a debug fallback that saves/sends a snippet of the rendered HTML when
+no listings are found for that site.
+This file intentionally uses the literal TELEGRAM_TOKEN and CHAT_ID.
 """
 import time
 import random
@@ -20,14 +22,15 @@ TELEGRAM_TOKEN = "7977881088:AAEr1JHIEdvd-kiXFyONscQg4HJkqzBr4bA"
 CHAT_ID = "660849220"
 # ==============================================
 
-# Sites to scrape
+# Sites to scrape (added Immobiliare)
 SCRAPE_LINKS = {
     'Casa.it': 'https://www.casa.it/srp/?tr=vendita&numRoomsMin=3&mqMin=80&priceMax=360000&sortType=relevance&propertyTypeGroup=case&q=9f6485c2',
     'Idealista': 'https://www.idealista.it/vendita-case/milano-milano/con-prezzo_360000?dimensione_80=on&appartamenti=on&trilocali-3=on&quadrilocali-4=on&5-locali-o-piu=on&pubblicato_ultima-settimana=on&nuova-costruzione=on&buono-stato=on&senza-inquilini=on',
     'Subito': 'https://www.subito.it/annunci-lombardia/vendita/appartamenti/milano/',
     'Tecnocasa': 'https://www.tecnocasa.it/annunci/immobili/lombardia/milano/milano.html?min_rooms=3&heating=1,3',
     'Grimaldi': 'https://www.grimaldifranchising.it/vendita-appartamenti/mi/milano?prezzo=360000&mq=80&numeroLocali=&numeroBagni=',
-    'CaseTra': 'https://www.casetraprivati.it/vendita-case/milano'
+    'CaseTra': 'https://www.casetraprivati.it/vendita-case/milano',
+    'Immobiliare': 'https://www.immobiliare.it/vendita-case/milano/con-riscaldamento-autonomo/?prezzoMassimo=400000&superficieMinima=80&localiMinimo=3&tipoProprieta=1'
 }
 
 USER_AGENTS = [
@@ -36,6 +39,7 @@ USER_AGENTS = [
 ]
 
 LISTING_STORE = "listing_visti.json"
+
 
 def normalize_link(link, base):
     link = (link or "").strip()
@@ -50,7 +54,102 @@ def normalize_link(link, base):
         return urljoin(base + "/", link)
     return link
 
+
+def extract_for_immobiliare(html, base_url, max_items=8):
+    """
+    Site-specific heuristics for immobiliare.it:
+    - find anchors with URLs that likely point to property pages
+    - search within parent container for price/mq/rooms
+    - returns list of listings
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    results = []
+    # find candidate anchors that likely link to listings
+    anchors = soup.find_all("a", href=True)
+    seen_hrefs = set()
+    for a in anchors:
+        href = a["href"]
+        # heuristics: immobiliare listing URLs frequently contain '/immobile/' or '/vendita-' or '/annunci/'
+        if re.search(r"/immobile/|/vendita-|/annunci/|/case-in-vendita/", href, re.I):
+            if href in seen_hrefs:
+                continue
+            seen_hrefs.add(href)
+            # try to find the nearest container with textual info
+            parent = a.find_parent(["article", "div", "li"]) or a
+            text = parent.get_text(" ", strip=True).lower()
+            # price
+            price = 0
+            m_price = re.search(r"€\s?([\d\.\s,]+)", parent.get_text(" ", strip=True))
+            if m_price:
+                digits = re.sub(r"[^\d]", "", m_price.group(1))
+                if digits:
+                    price = int(digits)
+            # mq
+            mq = 0
+            m_mq = re.search(r"(\d{2,4})\s?m(?:q|²|2|q)", text)
+            if m_mq:
+                mq = int(m_mq.group(1))
+            # rooms (best-effort)
+            rooms = 0
+            if re.search(r"\b(trilocale|3 locali|3 camere|3,?0 locali)\b", text):
+                rooms = 3
+            elif re.search(r"\b(quadrilocale|4 locali|4 camere)\b", text):
+                rooms = 4
+            elif re.search(r"\b(bilocale|2 locali|2 camere)\b", text):
+                rooms = 2
+            # zone
+            zone = "Milano"
+            zn = parent.find(lambda t: t.name in ["span", "div"] and re.search(r"milano|milan", t.get_text("", strip=True), re.I))
+            if zn:
+                zone = zn.get_text(" ", strip=True)
+            link = normalize_link(href, base_url)
+            # Apply Immobiliare-specific filters (your URL used prezzoMassimo=400000)
+            if price and price <= 400000 and mq >= 80 and rooms >= 3:
+                title = a.get_text(" ", strip=True) or parent.get_text(" ", strip=True)[:200]
+                results.append({
+                    "title": title[:200],
+                    "price": price,
+                    "mq": mq,
+                    "rooms": rooms,
+                    "zone": zone,
+                    "description": title[:250],
+                    "link": link,
+                    "source": "Immobiliare"
+                })
+            if len(results) >= max_items:
+                break
+
+    # fallback: page-wide regex scan
+    if not results:
+        snippets = re.findall(r"(.{0,120}€[\d\.\s,]{1,30}.{0,120}mq.{0,120})", html, flags=re.I | re.S)
+        for s in snippets[:max_items]:
+            m_p = re.search(r"€\s?([\d\.\s,]+)", s)
+            m_m = re.search(r"(\d{2,4})\s?m(?:q|²|2|q)", s)
+            if m_p and m_m:
+                price = int(re.sub(r"[^\d]", "", m_p.group(1)))
+                mq = int(m_m.group(1))
+                if price <= 400000 and mq >= 80:
+                    results.append({
+                        "title": s[:120],
+                        "price": price,
+                        "mq": mq,
+                        "rooms": 3,
+                        "zone": "Milano",
+                        "description": s[:200],
+                        "link": "",
+                        "source": "Immobiliare"
+                    })
+    return results
+
+
 def extract_listings_from_html(html, site_name, base_url, max_items=6):
+    """
+    General extractor; delegates to a site-specific extractor for Immobiliare
+    """
+    # site-specific path
+    if site_name == "Immobiliare":
+        return extract_for_immobiliare(html, base_url, max_items=max_items)
+
     soup = BeautifulSoup(html, "html.parser")
     results = []
 
@@ -65,27 +164,20 @@ def extract_listings_from_html(html, site_name, base_url, max_items=6):
         if items:
             break
 
-    # fallback: any anchor-like elements if no structured items
     if not items:
         items = soup.find_all("a", href=True)
 
     for item in items[:max_items]:
         try:
             a = item.find("a", href=True) or (item if item.name == "a" else None)
-            if a:
-                href = a.get("href")
-            else:
-                href = item.get("href") if hasattr(item, "get") else ""
+            href = a.get("href") if a else (item.get("href") if hasattr(item, "get") else "")
             link = normalize_link(href, base_url)
             title = (a.get("title") if a else "") or (a.get_text(" ", strip=True) if a else item.get_text(" ", strip=True))
             text = item.get_text(" ", strip=True).lower()
             # price
             price = 0
             price_elem = item.find(lambda tag: tag.name in ["span", "div"] and re.search(r"€|\beuro", tag.get_text("", strip=True).lower()))
-            if price_elem:
-                ptxt = price_elem.get_text("", strip=True)
-            else:
-                ptxt = text
+            ptxt = price_elem.get_text("", strip=True) if price_elem else text
             m = re.search(r"€\s?([\d\.\s,]+)", ptxt)
             if m:
                 digits = re.sub(r"[^\d]", "", m.group(1))
@@ -104,35 +196,34 @@ def extract_listings_from_html(html, site_name, base_url, max_items=6):
                 rooms = 4
             elif re.search(r"\b(bilocale|2 locali|2 camere)\b", text):
                 rooms = 2
-            # zone
             zone = "Milano"
             zn = item.find(lambda t: t.name in ["span", "div"] and re.search(r"milano|milan", t.get_text("", strip=True), re.I))
             if zn:
                 zone = zn.get_text(" ", strip=True)
-            # filter
+            # apply same constraints as before (360k)
             if price and price <= 360000 and mq >= 80 and rooms >= 3:
                 results.append({
-                    "title": (title or link)[:200],
+                    "title": title[:200],
                     "price": price,
                     "mq": mq,
                     "rooms": rooms,
                     "zone": zone,
-                    "description": (title or "")[:250],
+                    "description": title[:250],
                     "link": link,
                     "source": site_name
                 })
         except Exception:
             continue
 
-    # page-wide regex fallback
+    # fallback page-wide regex
     if not results:
         snippets = re.findall(r"(.{0,120}€[\d\.\s,]{1,30}.{0,120}mq.{0,120})", html, flags=re.I | re.S)
         for s in snippets[:max_items]:
-            m_price = re.search(r"€\s?([\d\.\s,]+)", s)
-            m_mq = re.search(r"(\d{2,4})\s?m(?:q|²|2|q)", s)
-            if m_price and m_mq:
-                price = int(re.sub(r"[^\d]", "", m_price.group(1)))
-                mq = int(m_mq.group(1))
+            m_p = re.search(r"€\s?([\d\.\s,]+)", s)
+            m_m = re.search(r"(\d{2,4})\s?m(?:q|²|2|q)", s)
+            if m_p and m_m:
+                price = int(re.sub(r"[^\d]", "", m_p.group(1)))
+                mq = int(m_m.group(1))
                 if price <= 360000 and mq >= 80:
                     results.append({
                         "title": s[:120],
@@ -144,8 +235,8 @@ def extract_listings_from_html(html, site_name, base_url, max_items=6):
                         "link": "",
                         "source": site_name
                     })
-
     return results
+
 
 def send_telegram(listing):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
@@ -168,17 +259,19 @@ def send_telegram(listing):
         print("Telegram request exception:", e)
         return False
 
-def scrape_with_playwright(url, headless=True, timeout=30000):
+
+def scrape_with_playwright(url, headless=True, timeout=40000):
     ua = random.choice(USER_AGENTS)
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=headless)
         context = browser.new_context(user_agent=ua, locale="it-IT")
         page = context.new_page()
         try:
-            page.set_viewport_size({"width": 1280, "height": 800})
+            page.set_viewport_size({"width": 1280, "height": 900})
             page.goto(url, wait_until="networkidle", timeout=timeout)
+            # small wait for late-loaded sections
             time.sleep(random.uniform(2.0, 4.0))
-            # try to accept cookie banner
+            # accept cookie banners if present
             for sel in ["button:has-text('Accetta')", "button:has-text('OK')", "button:has-text('Accetto')", "button:has-text('Accept')"]:
                 try:
                     els = page.query_selector_all(sel)
@@ -205,10 +298,30 @@ def scrape_with_playwright(url, headless=True, timeout=30000):
             browser.close()
     return content
 
+
+def save_and_send_debug(html, site_name):
+    """
+    Save HTML to file and send a short snippet to Telegram so you can inspect
+    what the page looks like after JS runs.
+    """
+    fn = f"debug_{site_name.lower()}.html"
+    try:
+        with open(fn, "w", encoding="utf-8") as f:
+            f.write(html)
+    except Exception:
+        pass
+    snippet = html[:2000].replace("\n", " ")
+    try:
+        requests.post(f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
+                      json={"chat_id": CHAT_ID, "text": f"DEBUG {site_name} snippet:\n{snippet}", "disable_web_page_preview": True}, timeout=10)
+    except Exception as e:
+        print("Failed to send debug snippet:", e)
+
+
 def main():
-    print("="*60)
+    print("=" * 60)
     print("Playwright scraper run -", datetime.now().isoformat())
-    print("="*60)
+    print("=" * 60)
     all_listings = []
     for site_name, url in SCRAPE_LINKS.items():
         print("Loading", site_name, "...")
@@ -216,6 +329,10 @@ def main():
         base_url = f"{urlparse(url).scheme}://{urlparse(url).netloc}"
         listings = extract_listings_from_html(html, site_name, base_url)
         print(f"  {site_name}: extracted {len(listings)} listings")
+        # if Immobiliare and nothing extracted, save/send debug snippet
+        if site_name == "Immobiliare" and not listings:
+            print("  Immobiliare extraction returned 0 — saving and sending debug snippet.")
+            save_and_send_debug(html, "Immobiliare")
         all_listings.extend(listings)
         time.sleep(random.uniform(1.0, 3.0))
 
@@ -255,6 +372,7 @@ def main():
         with open(LISTING_STORE, "w", encoding="utf-8") as f:
             json.dump(sorted(list(seen)), f, ensure_ascii=False, indent=2)
     print(f"Done. Sent {sent} new listings.")
+
 
 if __name__ == "__main__":
     main()
