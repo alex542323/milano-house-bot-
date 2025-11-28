@@ -1,4 +1,6 @@
 name: Milano House Bot
+permissions:
+  contents: read
 
 on:
   schedule:
