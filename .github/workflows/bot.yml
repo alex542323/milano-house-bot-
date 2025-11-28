@@ -18,7 +18,8 @@ jobs:
         python-version: '3.9'
     
     - name: Install dependencies
-      run: pip install requests beautifulsoup4 cloudscraper
+      run: pip install requests beautifulsoup4
+
     
     - name: Run bot
       run: python bot.py
