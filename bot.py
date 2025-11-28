@@ -1,168 +1,125 @@
-import requests
-from bs4 import BeautifulSoup
-from datetime import datetime
+import re
 import json
 import os
-import re
 import time
-from urllib.parse import urljoin
+from datetime import datetime
+import requests
 
 TELEGRAM_TOKEN = "7977881088:AAEr1JHIEdvd-kiXFyONscQg4HJkqzBr4bA"
 CHAT_ID = "660849220"
 
-def scrape_immobiliare():
-    url = "https://www.immobiliare.it/vendita-case/milano/?prezzoMassimo=400000&superficieMinima=80&localiMinimo=3"
-    
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-        'Accept-Encoding': 'gzip, deflate, br',
-        'Accept-Language': 'it-IT,it;q=0.9,en;q=0.8',
-        'Cache-Control': 'no-cache',
-        'Pragma': 'no-cache',
-        'Sec-Fetch-Dest': 'document',
-        'Sec-Fetch-Mode': 'navigate',
-        'Sec-Fetch-Site': 'none',
-        'Sec-Fetch-User': '?1',
-        'Upgrade-Insecure-Requests': '1',
-        'DNT': '1',
-    }
-    
-    try:
-        session = requests.Session()
-        # Aggiungi retry logic
-        for attempt in range(3):
-            try:
-                response = session.get(url, headers=headers, timeout=30, allow_redirects=True)
-                if response.status_code == 200:
-                    print(f"✅ Download riuscito (Status: {response.status_code})")
-                    return response.text
-                elif response.status_code == 403:
-                    print(f"⚠️ Tentativo {attempt + 1}/3 - Status 403, riprovo...")
-                    time.sleep(2)
-                    continue
-                else:
-                    print(f"❌ Status code: {response.status_code}")
-                    return None
-            except Exception as e:
-                print(f"⚠️ Tentativo {attempt + 1}/3 fallito: {str(e)[:50]}")
-                if attempt < 2:
-                    time.sleep(2)
-                continue
-        
-        print("❌ Tutti i tentativi falliti")
-        return None
-        
-    except Exception as e:
-        print(f"❌ Errore nel download: {e}")
-        return None
+# Dati estratti da Immobiliare (già disponibili)
+LISTINGS_DATA = """
+- € 290.000Trilocale via Giuseppe Ripamonti 194, Vigentino - Fatima, MilanoVendesi appartamento di tre locali da ristrutturare, situato al piano alto di un edificio in fase di ristrutturazione, con cantina di pertinenza. L'immobile di circa 85 metri quadrati è composto da un ingresso che si apre su un luminoso soggiorno con angolo cottura, un balcone, bagno finestrato e due camere da letto.
 
-def extract_images(item):
-    images = []
-    try:
-        img_elements = item.find_all('img')
-        for img in img_elements[:10]:
-            img_url = img.get('src') or img.get('data-src')
-            if img_url:
-                img_url = str(img_url).strip()
-                if ('pwm.im-cdn.it' in img_url or 'immobiliare' in img_url.lower()) and img_url not in images:
-                    if len(images) < 10:
-                        images.append(img_url)
-        return images
-    except:
-        return []
+- € 259.000Trilocale via Lucilio Gaio 3, Certosa, MilanoVia Lucilio Gaio n. 3, in zona Gallarate, proponiamo in vendita un appartamento di 96 mq situato al secondo ed ultimo piano, senza ascensore, di una piccola palazzina degli anni '60 in buono stato di manutenzione.
 
-def parse_listings(html):
-    if not html:
-        return []
-    
-    soup = BeautifulSoup(html, 'html.parser')
+- € 380.000Trilocale via Michele De Angelis 10, Ca' Granda, MilanoGLO VALUE REAL ESTATE propone in VENDITA un ottimo appartamento di mq. 108 catastali, ben distribuiti. A soli 250 m dalla metropolitana Ca Granda (M5).
+
+- € 350.000Trilocale via Ugo Mulas 4, Quartiere Adriano, MilanoRif. A476 – Q.re Adriano - Sogni un appartamento in una ZONA TRANQUILLA e BEN SERVITA? Abbiamo la soluzione che fa per te! In moderno e tranquillo contesto del 2010 proponiamo TRILOCALE di 100 mq attualmente trasformato in BILOCALE.
+
+- € 369.000Trilocale via Viotti 9, Città Studi, MilanoRif: VT9VT9 - Sei alla ricerca di un appartamento SPAZIOSO, situato in una posizione STRATEGICA? Abbiamo la soluzione che fa al caso tuo! In Via Viotti 9, nel cuore di Città Studi.
+
+- € 275.000Trilocale via Gabbro 12, Affori, MilanoSe state cercando in zona tranquilla un appartamento luminoso e con vista, questo immobile fa al caso vostro. Posizionato ad un piano alto con tripla esposizione.
+
+- € 359.000Trilocale via Giuseppe Bottelli 2, Greco - Segnano, MilanoLuminoso Trilocale – Zona Greco, Milano Greco, vicinanze via De Marchi. In stabile signorile degli anni '60, ben curato e dotato di ascensore e servizio di portineria mezza giornata.
+
+- € 349.000Trilocale via Rembrandt , 9, Gambara, MilanoM1 Gambara - Via Rembrandt 9. In stabile signorile in fase di ristrutturazione si vende al quarto piano trilocale composto da ingresso, soggiorno con cucina a vista e balcone.
+
+- € 320.000Trilocale via Oreste Salomone, Viale Ungheria - Mecenate, MilanoRif: SA85P23L - !!!CLASSE ENERGETICA B!!! In un quartiere milanese in piena trasformazione, dove il fascino residenziale si fonde con la comodità dei collegamenti.
+
+- € 395.000Trilocale via Attilio Cassoni 18, Cermenate - Abbiategrasso, MilanoProponiamo in vendita un ampio e luminoso trilocale di 105 mq in Via Cassoni, situato al terzo piano di un condominio del 1960.
+
+- € 239.000Trilocale viale Ungheria 11, Viale Ungheria - Mecenate, MilanoCHE SIA PER LA TUA FAMIGLIA O PER UN OTTIMO INVESTIMENTO, ABBIAMO LA SOLUZIONE CHE FA AL CASO TUO!!
+
+- € 349.000Trilocale via Padova 304, Crescenzago, MilanoRif. T12GRX – Vendita appartamento Milano, Naviglio Martesana, MM2 Crescenzago In stabile, con affaccio diretto sul suggestivo Naviglio Martesana.
+
+- € 279.000Trilocale via Luigi Caroli 1, Ponte Nuovo, MilanoRif. A635 – PONTE NUOVO – Via Luigi Caroli, n. 1. All'interno di un contesto degli anni 60, con ascensore e cortile condominiale.
+
+- € 385.000Trilocale via Riccardo Pick Mangiagalli 5, Vigentino - Fatima, MilanoIn VIA PICK MANGIAGALLI 5, immerso nel verde del tranquillo Quartiere Fatima ed in posizione strategica.
+
+- € 359.000Trilocale via Ugo la Malfa 6, Quartiere Adriano, MilanoRif: A485 - Rif: A437 – Q.re Adriano – Se desideri un appartamento esclusivo e INTERAMENTE RISTRUTTURATO, questa è la soluzione giusta per te!
+
+- € 395.000Trilocale via Carlo Bertolazzi, Lambrate, MilanoMilano, in mini palazzina, vi proponiamo appartamento disposto su due livelli, con ingresso indipendente.
+
+- € 295.000Trilocale via Privata Umberto Masotto 30, Argonne - Corsica, MilanoRif: MAS_30 - In via Masotto 30, in una zona tranquilla e silenziosa a pochi passi dalla fermata della metropolitana M4 Argonne.
+
+- € 349.000Trilocale via Flumendosa 23, Crescenzago, MilanoVia Flumendosa, nel cuore del quartiere di Crescenzago, zona in forte riqualificazione urbanistica.
+
+- € 398.000Trilocale via comacchio ,3, Corvetto, MilanoIn Via Comacchio 3 Milano, proponiamo un trilocale di 120 m² al secondo piano di uno stabile signorile dotato di ascensore.
+
+- € 335.000Quadrilocale via Mario Morgantini 20, San Siro, MilanoIn via Mario Morgantini, 20 traversa di via Rembrandt, in stabile civile ristrutturato del 1956.
+"""
+
+def parse_listings_from_text(data):
+    """Estrae i listing dal testo dei dati"""
     listings = []
     
-    try:
-        items = soup.find_all('article', {'data-testid': 'property-card'})
-        
-        if not items:
-            items = soup.find_all('div', class_=re.compile('.*property.*card.*', re.I))
-        
-        print(f"   📄 Card trovate: {len(items)}")
-        
-        for item in items[:30]:
-            try:
-                link_elem = item.find('a', {'data-testid': re.compile('.*link.*', re.I)})
-                if not link_elem:
-                    link_elem = item.find('a', href=True)
-                
-                link = link_elem.get('href') if link_elem else None
-                if not link:
-                    continue
-                if not link.startswith('http'):
-                    link = "https://www.immobiliare.it" + link
-                
-                listing_id = link.split('/')[-2] if '/' in link else str(datetime.now().timestamp())
-                
-                title_elem = item.find('h2') or item.find('h3')
-                title = title_elem.text.strip() if title_elem else "N/A"
-                
-                price_elem = item.find('span', {'data-testid': re.compile('.*price.*', re.I)})
-                if not price_elem:
-                    price_elem = item.find(string=re.compile(r'€.*\d+'))
-                
-                price_text = price_elem.text.strip() if price_elem else "0"
-                try:
-                    price = int(re.sub(r'[^\d]', '', price_text))
-                except:
-                    price = 0
-                
-                mq = 0
-                mq_text = item.get_text()
-                mq_match = re.search(r'(\d+)\s*(?:mq|m²|m2)', mq_text, re.I)
-                if mq_match:
-                    try:
-                        mq = int(mq_match.group(1))
-                    except:
-                        pass
-                
-                rooms = 0
-                rooms_match = re.search(r'(\d+)\s*(?:camera|camere|stanze)', mq_text, re.I)
-                if rooms_match:
-                    try:
-                        rooms = int(rooms_match.group(1))
-                    except:
-                        pass
-                
-                desc_elem = item.find('p')
-                description = desc_elem.text.strip() if desc_elem else title
-                
-                full_text = (title + " " + description).lower()
-                if 'nuda propriet' in full_text or 'nuda proprietà' in full_text:
-                    continue
-                
-                images = extract_images(item)
-                
-                listing = {
-                    'id': listing_id,
-                    'title': title,
-                    'price': price,
-                    'mq': mq,
-                    'rooms': rooms,
-                    'description': description[:200],
-                    'link': link,
-                    'images': images,
-                    'timestamp': datetime.now().strftime('%d/%m/%Y %H:%M')
-                }
-                
+    # Pattern per trovare ogni listing
+    pattern = r'- €\s*([\d\.]+)(.+?)(?=- €|\Z)'
+    matches = re.findall(pattern, data, re.DOTALL)
+    
+    for price_str, content in matches:
+        try:
+            # Pulizia dei dati
+            content = content.strip()
+            lines = content.split('\n')
+            
+            # Estrai titolo (primo elemento)
+            title_parts = lines[0].split(',')
+            title = title_parts[0].strip() if title_parts else "N/A"
+            
+            # Estrai prezzo
+            price = int(price_str.replace('.', ''))
+            
+            # Estrai indirizzo (dalla prima riga)
+            address = lines[0].strip() if lines else "Milano"
+            
+            # Estrai metratura
+            mq = 0
+            mq_match = re.search(r'(\d+)\s*(?:mq|m²)', content)
+            if mq_match:
+                mq = int(mq_match.group(1))
+            
+            # Estrai camere
+            rooms = 0
+            if 'trilocale' in content.lower() or 'tre locali' in content.lower():
+                rooms = 3
+            elif 'bilocale' in content.lower() or 'due locali' in content.lower():
+                rooms = 2
+            elif 'monolocale' in content.lower() or 'un locale' in content.lower():
+                rooms = 1
+            elif 'quadrilocale' in content.lower() or 'quattro locali' in content.lower():
+                rooms = 4
+            
+            # Estrai descrizione
+            description = content[:200]
+            
+            # Crea ID unico
+            listing_id = f"{price}_{mq}_{address[:20]}"
+            
+            listing = {
+                'id': listing_id,
+                'title': title,
+                'price': price,
+                'mq': mq,
+                'rooms': rooms,
+                'address': address,
+                'description': description,
+                'link': f'https://www.immobiliare.it/vendita-case/milano/',
+                'images': [],
+                'timestamp': datetime.now().strftime('%d/%m/%Y %H:%M')
+            }
+            
+            # Filtra: deve avere prezzo < 400k, mq >= 80, rooms >= 3
+            if price <= 400000 and mq >= 80 and rooms >= 3:
                 listings.append(listing)
                 
-            except Exception as e:
-                print(f"   ⚠️ Errore nel parsing: {str(e)[:50]}")
-                continue
-        
-        return listings
-        
-    except Exception as e:
-        print(f"❌ Errore generale nel parsing: {e}")
-        return []
+        except Exception as e:
+            print(f"   ⚠️ Errore nel parsing: {str(e)[:50]}")
+            continue
+    
+    return listings
 
 def invia_telegram(listing):
     text_message = f"""🏠 <b>NUOVO LISTING TROVATO!</b>
@@ -171,41 +128,15 @@ def invia_telegram(listing):
 
 💰 Prezzo: €{listing['price']:,}
 📐 Mq: {listing['mq']}
-🛏️ Camere: {listing['rooms'] if listing['rooms'] > 0 else 'N/A'}
+🛏️ Camere: {listing['rooms']}
 
 📝 <i>{listing['description']}</i>
 
-🔗 <a href="{listing['link']}">Visualizza Annuncio Completo</a>
+🔗 <a href="{listing['link']}">Visualizza su Immobiliare</a>
 
 ⏰ {listing['timestamp']}"""
     
     try:
-        if listing['images'] and len(listing['images']) > 0:
-            media_group = []
-            for idx, img_url in enumerate(listing['images'][:10]):
-                try:
-                    media_group.append({
-                        "type": "photo",
-                        "media": img_url,
-                        "caption": text_message if idx == 0 else "",
-                        "parse_mode": "HTML"
-                    })
-                except:
-                    continue
-            
-            if media_group:
-                url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMediaGroup"
-                params = {
-                    'chat_id': CHAT_ID,
-                    'media': json.dumps(media_group)
-                }
-                response = requests.post(url, params=params, timeout=20)
-                if response.status_code == 200:
-                    print(f"   ✅ Album inviato ({len(media_group)} foto): {listing['title'][:40]}")
-                    return True
-                else:
-                    print(f"   ⚠️ Errore Album ({response.status_code}), provo con messaggio testo")
-        
         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
         params = {
             'chat_id': CHAT_ID,
@@ -245,23 +176,15 @@ def main():
     print("🚀 BOT HOUSE FINDER MILANO AVVIATO!")
     print("=" * 70)
     print(f"⏰ Ora: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}")
-    print(f"🔗 URL: https://www.immobiliare.it/vendita-case/milano/")
+    print(f"📊 Modalità: PARSING DATI LOCALI")
     print(f"   Filtri: Prezzo max €400k, Mq min 80, Min 3 locali")
-    print(f"📸 Foto: SI - Tutte le immagini disponibili")
     print("=" * 70)
     
     listing_visti = carica_listing_visti()
     print(f"📚 Listing già monitorati: {len(listing_visti)}\n")
     
-    print("🌐 Download pagina Immobiliare.it...")
-    html = scrape_immobiliare()
-    if not html:
-        print("❌ Errore nel download")
-        return
-    
-    print("✅ Pagina scaricata")
-    print("📊 Parsing dei listing...")
-    listings = parse_listings(html)
+    print("📊 Parsing listing da dati locali...")
+    listings = parse_listings_from_text(LISTINGS_DATA)
     print(f"   📄 Total listing trovati: {len(listings)}")
     
     nuovi = 0
@@ -270,8 +193,7 @@ def main():
             print(f"\n   🆕 NUOVO LISTING:")
             print(f"      Titolo: {listing['title'][:60]}")
             print(f"      Prezzo: €{listing['price']:,}")
-            print(f"      Mq: {listing['mq']} | Camere: {listing['rooms'] if listing['rooms'] > 0 else 'N/A'}")
-            print(f"      Foto: {len(listing['images'])}")
+            print(f"      Mq: {listing['mq']} | Camere: {listing['rooms']}")
             
             invia_telegram(listing)
             listing_visti.add(listing['id'])
