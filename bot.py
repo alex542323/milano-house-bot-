@@ -10,19 +10,22 @@ CHAT_ID = "660849220"
 
 def scrape_immobiliare():
     url = "https://www.immobiliare.it/vendita-case/milano/con-riscaldamento-autonomo/?prezzoMassimo=400000&superficieMinima=80&localiMinimo=3&tipoProprieta=1"
-   headers = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-    'Accept-Language': 'it-IT,it;q=0.9',
-    'Accept-Encoding': 'gzip, deflate',
-    'DNT': '1',
-    'Connection': 'keep-alive',
-    'Upgrade-Insecure-Requests': '1',
-    'Referer': 'https://www.immobiliare.it/'
-}
+    
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'it-IT,it;q=0.9',
+        'Accept-Encoding': 'gzip, deflate',
+        'DNT': '1',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1',
+        'Referer': 'https://www.immobiliare.it/'
+    }
+    
     try:
-        response = requests.get(url, headers=headers, timeout=15)
+        response = requests.get(url, headers=headers, timeout=20)
         response.raise_for_status()
+        print(f"✅ Download riuscito (Status: {response.status_code})")
         return response.text
     except Exception as e:
         print(f"❌ Errore nel download: {e}")
@@ -33,46 +36,58 @@ def extract_images(item):
     images = []
     try:
         img_elements = item.find_all('img')
-        for img in img_elements:
+        for img in img_elements[:10]:
             img_url = img.get('src') or img.get('data-src')
-            if img_url and 'immobiliare' in img_url.lower():
-                if img_url not in images:
+            if img_url and ('pwm.im-cdn.it' in img_url or 'immobiliare' in img_url.lower()):
+                if img_url not in images and len(images) < 10:
                     images.append(img_url)
-        return images[:10]
+        return images
     except:
         return []
 
 def parse_listings(html):
+    """Estrae i listing dalla pagina HTML"""
     if not html:
         return []
+    
     soup = BeautifulSoup(html, 'html.parser')
     listings = []
+    
     try:
         items = soup.find_all('article', {'data-testid': 'property-card'})
+        
         if not items:
             items = soup.find_all('div', class_=re.compile('.*property.*card.*', re.I))
+        
         print(f"   📄 Card trovate: {len(items)}")
-        for item in items:
+        
+        for item in items[:30]:
             try:
                 link_elem = item.find('a', {'data-testid': re.compile('.*link.*', re.I)})
                 if not link_elem:
                     link_elem = item.find('a', href=True)
+                
                 link = link_elem.get('href') if link_elem else None
                 if not link:
                     continue
                 if not link.startswith('http'):
                     link = "https://www.immobiliare.it" + link
+                
                 listing_id = link.split('/')[-2] if '/' in link else str(datetime.now().timestamp())
+                
                 title_elem = item.find('h2') or item.find('h3')
                 title = title_elem.text.strip() if title_elem else "N/A"
+                
                 price_elem = item.find('span', {'data-testid': re.compile('.*price.*', re.I)})
                 if not price_elem:
                     price_elem = item.find(string=re.compile(r'€.*\d+'))
+                
                 price_text = price_elem.text.strip() if price_elem else "0"
                 try:
                     price = int(re.sub(r'[^\d]', '', price_text))
                 except:
                     price = 0
+                
                 mq = 0
                 mq_text = item.get_text()
                 mq_match = re.search(r'(\d+)\s*(?:mq|m²|m2)', mq_text, re.I)
@@ -81,6 +96,7 @@ def parse_listings(html):
                         mq = int(mq_match.group(1))
                     except:
                         pass
+                
                 rooms = 0
                 rooms_match = re.search(r'(\d+)\s*(?:camera|camere|stanze)', mq_text, re.I)
                 if rooms_match:
@@ -88,12 +104,16 @@ def parse_listings(html):
                         rooms = int(rooms_match.group(1))
                     except:
                         pass
+                
                 desc_elem = item.find('p')
                 description = desc_elem.text.strip() if desc_elem else title
+                
                 full_text = (title + " " + description).lower()
                 if 'nuda propriet' in full_text or 'nuda proprietà' in full_text:
                     continue
+                
                 images = extract_images(item)
+                
                 listing = {
                     'id': listing_id,
                     'title': title,
@@ -105,17 +125,21 @@ def parse_listings(html):
                     'images': images,
                     'timestamp': datetime.now().strftime('%d/%m/%Y %H:%M')
                 }
+                
                 listings.append(listing)
+                
             except Exception as e:
                 print(f"   ⚠️ Errore nel parsing: {str(e)[:50]}")
                 continue
+        
         return listings
+        
     except Exception as e:
         print(f"❌ Errore generale nel parsing: {e}")
         return []
 
 def invia_telegram(listing):
-    """Invia messaggio con tutte le foto"""
+    """Invia messaggio con foto a Telegram"""
     text_message = f"""🏠 <b>NUOVO LISTING TROVATO!</b>
 
 <b>{listing['title']}</b>
@@ -131,9 +155,9 @@ def invia_telegram(listing):
 ⏰ {listing['timestamp']}"""
     
     try:
-        if listing['images']:
+        if listing['images'] and len(listing['images']) > 0:
             media_group = []
-            for idx, img_url in enumerate(listing['images']):
+            for idx, img_url in enumerate(listing['images'][:10]):
                 try:
                     media_group.append({
                         "type": "photo",
@@ -150,12 +174,12 @@ def invia_telegram(listing):
                     'chat_id': CHAT_ID,
                     'media': json.dumps(media_group)
                 }
-                response = requests.post(url, params=params, timeout=15)
+                response = requests.post(url, params=params, timeout=20)
                 if response.status_code == 200:
                     print(f"   ✅ Album inviato ({len(media_group)} foto): {listing['title'][:40]}")
                     return True
                 else:
-                    print(f"   ⚠️ Errore Album, provo con messaggio testo")
+                    print(f"   ⚠️ Errore Album ({response.status_code}), provo con messaggio testo")
         
         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
         params = {
@@ -176,6 +200,7 @@ def invia_telegram(listing):
         return False
 
 def carica_listing_visti():
+    """Carica i listing già visti da un file"""
     try:
         if os.path.exists('listing_visti.json'):
             with open('listing_visti.json', 'r') as f:
@@ -185,6 +210,7 @@ def carica_listing_visti():
     return set()
 
 def salva_listing_visti(visti):
+    """Salva i listing visti su file"""
     try:
         with open('listing_visti.json', 'w') as f:
             json.dump(list(visti), f)
