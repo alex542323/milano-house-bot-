@@ -1,10 +1,11 @@
-import cloudscraper
+import requests
 from bs4 import BeautifulSoup
 from datetime import datetime
 import json
 import os
 import re
 import time
+from urllib.parse import urljoin
 
 TELEGRAM_TOKEN = "7977881088:AAEr1JHIEdvd-kiXFyONscQg4HJkqzBr4bA"
 CHAT_ID = "660849220"
@@ -12,12 +13,46 @@ CHAT_ID = "660849220"
 def scrape_immobiliare():
     url = "https://www.immobiliare.it/vendita-case/milano/?prezzoMassimo=400000&superficieMinima=80&localiMinimo=3"
     
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Accept-Language': 'it-IT,it;q=0.9,en;q=0.8',
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache',
+        'Sec-Fetch-Dest': 'document',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Site': 'none',
+        'Sec-Fetch-User': '?1',
+        'Upgrade-Insecure-Requests': '1',
+        'DNT': '1',
+    }
+    
     try:
-        scraper = cloudscraper.create_scraper()
-        response = scraper.get(url, timeout=30)
-        response.raise_for_status()
-        print(f"✅ Download riuscito (Status: {response.status_code})")
-        return response.text
+        session = requests.Session()
+        # Aggiungi retry logic
+        for attempt in range(3):
+            try:
+                response = session.get(url, headers=headers, timeout=30, allow_redirects=True)
+                if response.status_code == 200:
+                    print(f"✅ Download riuscito (Status: {response.status_code})")
+                    return response.text
+                elif response.status_code == 403:
+                    print(f"⚠️ Tentativo {attempt + 1}/3 - Status 403, riprovo...")
+                    time.sleep(2)
+                    continue
+                else:
+                    print(f"❌ Status code: {response.status_code}")
+                    return None
+            except Exception as e:
+                print(f"⚠️ Tentativo {attempt + 1}/3 fallito: {str(e)[:50]}")
+                if attempt < 2:
+                    time.sleep(2)
+                continue
+        
+        print("❌ Tutti i tentativi falliti")
+        return None
+        
     except Exception as e:
         print(f"❌ Errore nel download: {e}")
         return None
@@ -28,9 +63,11 @@ def extract_images(item):
         img_elements = item.find_all('img')
         for img in img_elements[:10]:
             img_url = img.get('src') or img.get('data-src')
-            if img_url and ('pwm.im-cdn.it' in img_url or 'immobiliare' in img_url.lower()):
-                if img_url not in images and len(images) < 10:
-                    images.append(img_url)
+            if img_url:
+                img_url = str(img_url).strip()
+                if ('pwm.im-cdn.it' in img_url or 'immobiliare' in img_url.lower()) and img_url not in images:
+                    if len(images) < 10:
+                        images.append(img_url)
         return images
     except:
         return []
@@ -143,7 +180,6 @@ def invia_telegram(listing):
 ⏰ {listing['timestamp']}"""
     
     try:
-        import requests
         if listing['images'] and len(listing['images']) > 0:
             media_group = []
             for idx, img_url in enumerate(listing['images'][:10]):
@@ -177,7 +213,6 @@ def invia_telegram(listing):
             'parse_mode': 'HTML',
             'disable_web_page_preview': 'true'
         }
-        import requests
         response = requests.post(url, params=params, timeout=10)
         if response.status_code == 200:
             print(f"   ✅ Messaggio inviato: {listing['title'][:50]}")
