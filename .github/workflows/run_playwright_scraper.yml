@@ -1,10 +1,13 @@
-name: run-playwright-scraper
+name: Sanremo House Bot - scraper
 
 on:
   workflow_dispatch:
   schedule:
     # run every 15 minutes - change if you want a different frequency
     - cron: '*/15 * * * *'
+
+permissions:
+  contents: write
 
 jobs:
   run-bot:
@@ -25,8 +28,20 @@ jobs:
 
       - name: Install Playwright browsers
         run: |
-          python -m playwright install --with-deps
+          python -m playwright install --with-deps chromium
 
       - name: Run Playwright scraper
         run: |
           python playwright_scraper.py
+
+      - name: Commit and push updated dashboard/data
+        run: |
+          git config user.name "sanremo-house-bot"
+          git config user.email "actions@github.com"
+          git add docs/index.html all_listings.json listing_visti.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Update listings dashboard [skip ci]"
+            git push
+          else
+            echo "No changes to commit."
+          fi
